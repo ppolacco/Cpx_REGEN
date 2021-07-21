@@ -57,7 +57,6 @@ def interpolation_gen(geo):
     V_d1_vect = np.zeros(len(theta_vol))
     V_d2_vect = np.zeros(len(theta_vol))
     V_dd_vect = np.zeros(len(theta_vol))
-    V_dd_vect = np.zeros(len(theta_vol))
     
     # Initialization of the vectors to interpolate (volume)
     dV_sa_vect = np.zeros(len(theta_vol))
@@ -68,36 +67,40 @@ def interpolation_gen(geo):
     dV_d1_vect = np.zeros(len(theta_vol))
     dV_d2_vect = np.zeros(len(theta_vol))
     dV_dd_vect = np.zeros(len(theta_vol))
-    dV_dd_vect = np.zeros(len(theta_vol))
     
-    # Volumes and volume derivatives are computed throughout the whole rotation
+
+    # Volumes,volume derivatives and other geometrical quantities are computed throughout the whole rotation
     # using the proper function of the geometry module. This is a crucial part in term of
     # computational effort.
     for i in range(len(theta_vol)): 
-        V_sa_vect[i] = GeoF.volume_force_sa(geo,theta_vol[i])["V"]/1e9
-        V_s1_vect[i] = GeoF.volume_force_s1(geo,theta_vol[i])["V"]/1e9
-        V_s2_vect[i] = GeoF.volume_force_s2(geo,theta_vol[i])["V"]/1e9
-        # COMPRESSION VOLUME
+        dict_sa = GeoF.volume_force_sa(geo,theta_vol[i],False)
+        dict_s1 = GeoF.volume_force_s1(geo,theta_vol[i],False)
+        dict_s2 = GeoF.volume_force_s2(geo,theta_vol[i],False)
+        dict_c1 = GeoF.volume_force_c1(geo,theta_vol[i],False)
+        dict_c2 = GeoF.volume_force_c2(geo,theta_vol[i],False)
+        dict_d1 = GeoF.volume_force_d1(geo,theta_vol[i],False)
+        dict_d2 = GeoF.volume_force_d2(geo,theta_vol[i],False)
+        dict_dd = GeoF.volume_force_dd(geo,theta_vol[i],False)
+        # VOLUMES
+        V_sa_vect[i] = dict_sa["V"]/1e9
+        V_s1_vect[i] = dict_s1["V"]/1e9
+        V_s2_vect[i] = dict_s2["V"]/1e9
         for alpha in range(1,geo.N_c_max + 1,1):
-            V_c1_vect[i,alpha-1] = GeoF.volume_force_c1(geo,theta_vol[i])[alpha]["V"]/1e9
-            V_c2_vect[i,alpha-1] = GeoF.volume_force_c2(geo,theta_vol[i])[alpha]["V"]/1e9
-        # DISCHARGE VOLUME
-        V_d1_vect[i] = GeoF.volume_force_d1(geo,theta_vol[i])["V"]/1e9
-        V_d2_vect[i] = GeoF.volume_force_d2(geo,theta_vol[i])["V"]/1e9
-        V_dd_vect[i] = GeoF.volume_force_dd(geo,theta_vol[i])["V"]/1e9
-        # SUCTION VOLUME DERIVATE
-        dV_sa_vect[i] = GeoF.volume_force_sa(geo,theta_vol[i])["dVdTheta"]/1e9
-        dV_s1_vect[i] = GeoF.volume_force_s1(geo,theta_vol[i])["dVdTheta"]/1e9
-        dV_s2_vect[i] = GeoF.volume_force_s2(geo,theta_vol[i])["dVdTheta"]/1e9
-        # COMPRESSION VOLUME DERIVATIVE
-        for alpha in range(1,geo.N_c_max + 1,1):        
-            dV_c1_vect[i,alpha-1] = GeoF.volume_force_c1(geo,theta_vol[i])[alpha]["dVdTheta"]/1e9
-            dV_c2_vect[i,alpha-1] = GeoF.volume_force_c2(geo,theta_vol[i])[alpha]["dVdTheta"]/1e9
-        # DISCHARGE VOLUME DERIVATIVE
-        dV_d1_vect[i] = GeoF.volume_force_d1(geo,theta_vol[i])["dVdTheta"]/1e9
-        dV_d2_vect[i] = GeoF.volume_force_d2(geo,theta_vol[i])["dVdTheta"]/1e9
-        dV_dd_vect[i] = GeoF.volume_force_dd(geo,theta_vol[i])["dVdTheta"]/1e9
-
+            V_c1_vect[i,alpha-1] = dict_c1[alpha]["V"]/1e9
+            V_c2_vect[i,alpha-1] = dict_c2[alpha]["V"]/1e9
+        V_d1_vect[i] = dict_d1["V"]/1e9
+        V_d2_vect[i] = dict_d2["V"]/1e9
+        V_dd_vect[i] = dict_dd["V"]/1e9
+        # VOLUME DERIVATIVES
+        dV_sa_vect[i] = dict_sa["dVdTheta"]/1e9
+        dV_s1_vect[i] = dict_s1["dVdTheta"]/1e9
+        dV_s2_vect[i] = dict_s2["dVdTheta"]/1e9
+        for alpha in range(1,geo.N_c_max + 1,1):
+            dV_c1_vect[i,alpha-1] = dict_c1[alpha]["dVdTheta"]/1e9
+            dV_c2_vect[i,alpha-1] = dict_c2[alpha]["dVdTheta"]/1e9
+        dV_d1_vect[i] = dict_d1["dVdTheta"]/1e9
+        dV_d2_vect[i] = dict_d2["dVdTheta"]/1e9
+        dV_dd_vect[i] = dict_dd["dVdTheta"]/1e9
 
     # The variation of volumes and volume derivative is approximated by means of polynomial
     # approximation. 'n' represents the grade of the polynomial used to approximate the variation

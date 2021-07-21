@@ -50,6 +50,7 @@ class controlVolume:
         self.dict_dV = dict_dV 
         self.dict_area = dict_area
         self.theta = 0
+        self.existence = []
         
         # The inlet values of temperature and density are directly assigned as initial values of temperature and
         # density for suction chambers and first pair of compression chambers. The volume is evaluated through the
@@ -168,8 +169,9 @@ class controlVolume:
             
     # The 'record_values' function is used to record the value of the properties within each chamber at every crank 
     # angle step during the last crank angle rotation (after stopping criteria are met).
-    def record_values(self):
-                
+    def record_values(self,existence):
+        
+        self.existence.append(existence)
         self.P_vect_final.append(self.P)
         self.T_vect_final.append(self.T)
         self.Q_vect_final.append(self.Q)
@@ -184,8 +186,8 @@ class controlVolume:
         for k in self.m_dot_vect_final: 
             self.m_dot_vect_final[k].append(self.m_dot_dict[k])
     
+    
     def discharge(self, old_CV):
-        
         
         self.T = old_CV.T
         self.rho = old_CV.rho
@@ -200,7 +202,6 @@ class controlVolume:
         self.theta = old_CV.theta
         
         if old_CV.name == 'ddd':
-            
             self.mh_sum = old_CV.mh_sum 
             self.m_sum = old_CV.m_sum
             self.h_disc = old_CV.h_disc
@@ -323,12 +324,24 @@ class controlVolume:
         # if the pressure inside the discharge chamber is higher than the pressure in the discharge pipe.
         if self.name == 'ddd' or self.name == 'dd': 
             A_port = np.polyval(self.dict_area['port'], self.theta)
+            # A simple valve model is considered. It is based on a very simple model of a pre-charged valve
+            # that closes the discharge port if the pressure in the discharge chamber is lower than a fixed
+            # value and opens gradually the port until the pressure reaches the value of the discharge region.
             if Reed_valve == True:
                 delta_P = 0;
                 if self.P > P_out + delta_P: 
                     (m_dot_ex, h_ex, _) = procF.isentropic_nozzle(geo, property_matrix, A_port,  self.rho,  self.T, self.x_l, h2 = self.h_out, P2 = P_out, x_l2 = self.x_out)  
                 else :
                     (m_dot_ex, h_ex, _) = (0,0,0)
+                # delta_P = self.P/100
+                # if self.P < P_out - delta_P:
+                #     (m_dot_ex, h_ex, _) = (0,0,0)
+                # elif self.P > P_out: 
+                #     (m_dot_ex, h_ex, _) = procF.isentropic_nozzle(geo, property_matrix, A_port,  self.rho,  self.T, self.x_l, h2 = self.h_out, P2 = P_out, x_l2 = self.x_out)
+                # else:
+                #     A_port = A_port*(self.P - P_out + delta_P)/(delta_P)
+                #     (m_dot_ex, h_ex, _) = procF.isentropic_nozzle(geo, property_matrix, A_port,  self.rho,  self.T, self.x_l, h2 = self.h_out, P2 = P_out, x_l2 = self.x_out)
+            # If reed valve model is not included the discharge port is considered to be fully open at all times
             if Reed_valve == False:
                 (m_dot_ex, h_ex, _) = procF.isentropic_nozzle(geo, property_matrix, A_port,  self.rho,  self.T, self.x_l, h2 = self.h_out, P2 = P_out, x_l2 = self.x_out)
             
@@ -618,7 +631,8 @@ class controlVolume:
                 (self.m_dot_dict['r3'], self.h_dict['r3']) = (0., 0.)
                 (self.m_dot_dict['r4'], self.h_dict['r4']) = (0., 0.) 
                 (self.m_dot_dict['fl1'], self.h_dict['fl1']) = (0., 0.)
-                (self.m_dot_dict['fl2'], self.h_dict['fl2']) = (0., 0.)             
+                (self.m_dot_dict['fl2'], self.h_dict['fl2']) = (0., 0.)
+                
 
 
 # The isentropic nozzle model effectively captures the compressibility effects, although it does not capture the frictional 
@@ -727,6 +741,7 @@ def merging_process(property_matrix, CV_ddd, CV_dd, CV_d1, CV_d2):
 # crank angle. 
 def stopping_criteria(geo, CV_c1, CV_ddd, tol)  :   
     
+    
     L = len(CV_ddd.dict_init['T']) - 1 
     
     ddd_cond_T = abs(CV_ddd.dict_init['T'][L] \
@@ -741,6 +756,7 @@ def stopping_criteria(geo, CV_c1, CV_ddd, tol)  :
     
     stop = True and ddd_cond_T and ddd_cond_rho
     
+    # The size the c1_cond_(T,rho) lists are variable depending on the geometry.
     while alpha <= geo.N_c_max:
         
         c1_cond_T[alpha] = abs(CV_c1[alpha].dict_init['T'][L] \
@@ -753,6 +769,7 @@ def stopping_criteria(geo, CV_c1, CV_ddd, tol)  :
         alpha += 1
         
     stop = stop == False
+    
     return stop
     
  
@@ -916,11 +933,124 @@ def leakage_computation(property_matrix, geo, exist, CV_s1, CV_c1, CV_d1, CV_ddd
         alpha = 1
         while alpha <= geoF.N_c_calculation(geo,CV_s1.theta):
             CV_c1[alpha].leakages(property_matrix, geo, exist, CVs1 = CV_s1, CVc1 = CV_c1, CVd1 = CV_d1, CVddd = CV_ddd)
-            alpha += 1
+            alpha += 1    
 
-    else:
-        pass
+# Computation of dynamic effects exerted on the scroll set.
+def force_computation(CV,CV_sa,geo,theta_step,dict_V):    
+    # AXIAL FORCE & TILTING MOMENT
+    # Axial force is initialized
+    axial_force = []
+    axial_force_aux = 0 
+    
+    # The length of the lists that contain the themrodynamic properties in each chamber coincide with the number of
+    # crank angle step that have been simulated.
+    for i in range(len(CV["s1"].P_vect_final)):
+        
+        # The axial force exerted on each chamber contributes on the total axial force exerted on the scroll set.
+        # The first computed (outside the for loop) is the force exerted by the region between the scroll set and
+        # the outer wall of the casing
+        V_sa = np.polyval(dict_V["sa"][0], theta_step*i)
+        axial_force_aux += (CV_sa.P_init - 101325)*(V_sa/(1e-3*geo.h_s))
+        # The force exerted by each other chamber is computed in this for loop.
+        for element in CV:
+            # The axial force is computed as the chamber section area time the differential pressure between chamber and 
+            # machine shell
+            if element == 'c1':
+                for alpha in range(len(CV[element])):
+                    axial_force_aux += CV[element][alpha+1].existence[i]*2*(CV[element][alpha+1].P_vect_final[i] - 101325)*(CV[element][alpha+1].V_vect_final[i]/(1e-3*geo.h_s))
+            elif element == 's1' or element == 'd1':
+                axial_force_aux += CV[element].existence[i]*2*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(1e-3*geo.h_s))
+            else:
+                axial_force_aux += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(1e-3*geo.h_s))
+        # The exial force at the i-th theta is stored within the 'axial_force' list. 'axial_force_aux' is re-initialized
+        axial_force.append(axial_force_aux)
+        axial_force_aux = 0
+    
+    # RADIAL FORCE & TILTING MOMENT
+    # Radial force and tilting moments are initialized
+    radial_force = []
+    tilting_moment_x = []
+    tilting_moment_y = []
+    tilting_moment = []
+    radial_force_aux = 0
+    tilting_moment_aux_x = 0
+    tilting_moment_aux_y = 0
+    
+    # - Radial Force = it is computed as the ratio between the moment exerted by one chamber and its lever arm, computed
+    #                  as the norm of the vector (cx,cy)
+    # - Tilting moment = it is computed as the axial force exerted on a chamber multiplied by the lever arm of that force
+    
+    # The length of the lists that contain the themrodynamic properties in each chamber coincide with the number of
+    # crank angle step that have been simulated.
+    for i in range(len(CV["s1"].P_vect_final)):
+        # The geometric characteristic of each chamber are computed at each crank angle step.
+        dict_s1 = geoF.volume_force_s1(geo,theta_step*i,True)
+        dict_s2 = geoF.volume_force_s2(geo,theta_step*i,True)
+        dict_sa = geoF.volume_force_sa(geo,theta_step*i,True)
+        dict_c1 = geoF.volume_force_c1(geo,theta_step*i,True)
+        dict_c2 = geoF.volume_force_c2(geo,theta_step*i,True)
+        dict_d1 = geoF.volume_force_d1(geo,theta_step*i,True)
+        dict_d2 = geoF.volume_force_d2(geo,theta_step*i,True)
+        dict_dd = geoF.volume_force_dd(geo,theta_step*i,True)
+        # The radial force exerted on each chamber contributes on the total axial force exerted on the scroll set.
+        # Outside of the for loop the radial force exerted by the fluid in the region between the scroll set and
+        # the outer wall of the casing is computed.
+        radial_force_x_sa = (dict_sa["fx_p"]*CV_sa.P_init)*1e-6
+        radial_force_y_sa = (dict_sa["fy_p"]*CV_sa.P_init)*1e-6
+        radial_force_aux += np.linalg.norm(np.array(radial_force_x_sa,radial_force_y_sa))
+        # Tilting moment exerted by the fluid in the region between the scroll set and the outer wall of the casing 
+        # is computed
+        tilting_moment_aux_x += (CV_sa.P_init - 101325)*(dict_sa["V"]/geo.h_s)*dict_sa["cy"]*1e-9
+        tilting_moment_aux_y -= (CV_sa.P_init - 101325)*(dict_sa["V"]/geo.h_s)*dict_sa["cx"]*1e-9
+        for element in CV:
+            if element == 'c1':
+                for alpha in range(len(element)+1):
+                    if np.isnan(dict_c1[alpha+1]["cy"]) == False:
+                        radial_force_aux += CV[element][alpha+1].existence[i]*(dict_c1[alpha+1]["MO_p"]*CV[element][alpha+1].P_vect_final[i])*1e-6/np.sqrt(dict_c1[alpha+1]["cx"]**2 + dict_c1[alpha+1]["cy"]**2)
+                        radial_force_aux += CV[element][alpha+1].existence[i]*(dict_c2[alpha+1]["MO_p"]*CV[element][alpha+1].P_vect_final[i])*1e-6/np.sqrt(dict_c2[alpha+1]["cx"]**2 + dict_c2[alpha+1]["cy"]**2)
+                        tilting_moment_aux_x += CV[element][alpha+1].existence[i]*(CV[element][alpha+1].P_vect_final[i] - 101325)*(CV[element][alpha+1].V_vect_final[i]*dict_c1[alpha+1]["cy"]/(geo.h_s))
+                        tilting_moment_aux_y -= CV[element][alpha+1].existence[i]*(CV[element][alpha+1].P_vect_final[i] - 101325)*(CV[element][alpha+1].V_vect_final[i]*dict_c1[alpha+1]["cx"]/(geo.h_s))
+                        tilting_moment_aux_x += CV[element][alpha+1].existence[i]*(CV[element][alpha+1].P_vect_final[i] - 101325)*(CV[element][alpha+1].V_vect_final[i]*dict_c2[alpha+1]["cy"]/(geo.h_s))
+                        tilting_moment_aux_y -= CV[element][alpha+1].existence[i]*(CV[element][alpha+1].P_vect_final[i] - 101325)*(CV[element][alpha+1].V_vect_final[i]*dict_c2[alpha+1]["cx"]/(geo.h_s))
+            
+            elif element == 's1':
+                radial_force_aux += CV[element].existence[i]*(dict_s1["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_s1["cx"]**2 + dict_s1["cy"]**2)
+                radial_force_aux += CV[element].existence[i]*(dict_s2["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_s2["cx"]**2 + dict_s2["cy"]**2)
+                tilting_moment_aux_x += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_s1["cy"]
+                tilting_moment_aux_y -= CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_s1["cx"]         
+                tilting_moment_aux_x += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_s2["cy"]
+                tilting_moment_aux_y -= CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_s2["cx"]         
 
+            elif element == 'd1':
+                radial_force_aux += CV[element].existence[i]*(dict_d1["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_d1["cx"]**2 + dict_d1["cy"]**2)
+                radial_force_aux += CV[element].existence[i]*(dict_d2["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_d2["cx"]**2 + dict_d2["cy"]**2)
+                tilting_moment_aux_x += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_d1["cy"]
+                tilting_moment_aux_y -= CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_d1["cx"]                     
+                tilting_moment_aux_x += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_d2["cy"]
+                tilting_moment_aux_y -= CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_d2["cx"]                     
+
+            elif element == 'dd':
+                radial_force_aux += CV[element].existence[i]*(dict_dd["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_dd["cx"]**2 + dict_dd["cy"]**2)
+                tilting_moment_aux_x += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_dd["cy"]
+                tilting_moment_aux_y -= CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*dict_dd["cx"]                                    
+            
+            elif element == 'ddd':
+                radial_force_aux += CV[element].existence[i]*(dict_dd["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_dd["cx"]**2  + dict_s1["cy"]**2) + CV[element].existence[i]*(dict_d1["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_d1["cx"]**2 + dict_d1["cy"]**2) + CV[element].existence[i]*(dict_d2["MO_p"]*CV[element].P_vect_final[i])*1e-6/np.sqrt(dict_d2["cx"]**2 + dict_d2["cy"]**2)
+                cx_ddd = (dict_d1['cx']*dict_d1['V'] + dict_d2['cx']*dict_d2['V'] + dict_dd['cx']*dict_dd['V'])/(dict_d1['V'] + dict_d2['V'] + dict_dd['V'])
+                cy_ddd = (dict_d1['cy']*dict_d1['V'] + dict_d2['cy']*dict_d2['V'] + dict_dd['cy']*dict_dd['V'])/(dict_d1['V'] + dict_d2['V'] + dict_dd['V'])
+                tilting_moment_aux_x += CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*cy_ddd
+                tilting_moment_aux_y -= CV[element].existence[i]*(CV[element].P_vect_final[i] - 101325)*(CV[element].V_vect_final[i]/(geo.h_s))*cx_ddd                     
+            
+        # The radial force at the i-th theta is stored within the 'radial_force' list. 'radial_force_aux' is re-initialized
+        radial_force.append(radial_force_aux)
+        tilting_moment_x.append(tilting_moment_aux_x)
+        tilting_moment_y.append(tilting_moment_aux_y)
+        tilting_moment.append(np.sqrt(tilting_moment_aux_x**2 + tilting_moment_aux_y**2))
+        radial_force_aux = 0
+        tilting_moment_aux_x = 0
+        tilting_moment_aux_y = 0
+        
+    return axial_force, radial_force, tilting_moment_x, tilting_moment_y, tilting_moment
 
 
 # The 'full_resolution' function is called by the main script. It uses as input the geometry of the machine ('geo', 'dictV',
@@ -977,9 +1107,6 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
         
             # If leakage computation is turn on, leakages are evaluated. 
             leakage_computation(property_matrix, geo, 'ddd', CV_s1, CV_c1, CV_d1, CV_ddd, leakage)
-            # print('s1',CV_s1.h_dict['r3'],CV_c1[1].h_dict['r2'])
-            # print('c1',CV_c1[1].h_dict['r4'], CV_c1[2].h_dict['r1'])
-            # print('ddd',CV_c1[2].h_dict['r4'], CV_ddd.h_dict['r1']/2)
             
             # Mass flow rates through 'ddd' chamber and 's1' chambers are evaluated using their respective method.
             CV_s1.mass_flow_su(property_matrix, geo, rho_in, T_in, x_l_in, theta_step)
@@ -1012,10 +1139,8 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
         
             # If leakage computation is turned on, leakages are evaluated.
             leakage_computation(property_matrix, geo, 'd', CV_s1, CV_c1, CV_d1, CV_ddd, leakage)
-            # print('s1',CV_s1.h_dict['r3'],CV_c1[1].h_dict['r2'])
-            # print('d1',CV_c1[1].h_dict['r4'], CV_d1.h_dict['r1'])
           
-            # Mass flow rates through 'ddd' chamber and 's1' chambers are evaluated using their respective method.
+            # Mass flow rates through 'dd' chamber and 's1' chambers are evaluated using their respective method.
             CV_s1.mass_flow_su(property_matrix, geo, rho_in, T_in, x_l_in, theta_step)
             CV_dd.mass_flow_ex(property_matrix, geo, P_out, theta_step, Reed_valve)
             
@@ -1046,17 +1171,16 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
         # After the merging angle, the shift angle can be set to 0.
         CV_ddd.theta_shift = 0
         
-        # In this while loop the remaining of the crank rotation is simulated
+        # In this while loop the remaining part of the crank rotation is simulated
         while theta < 2*pi:
             
-            # If leakage computation is turn on, leakages are evaluated.
+            # If leakage computation is turned on, leakages are evaluated.
             leakage_computation(property_matrix, geo, 'ddd', CV_s1, CV_c1, CV_d1, CV_ddd, leakage)
-            # print('s1',CV_s1.h_dict['r3'], CV_c1[1].h_dict['r2'])
-            # print('ddd',CV_c1[1].h_dict['r4'], CV_ddd.h_dict['r1']/2)
            
             # Mass flow rates through 'ddd' chamber and 's1' chambers are evaluated using their respective method.
             CV_s1.mass_flow_su(property_matrix, geo, rho_in, T_in, x_l_in, theta_step)
             CV_ddd.mass_flow_ex(property_matrix, geo, P_out, theta_step, Reed_valve) 
+        
             
             # The 'next_values' method is called for the 's1' chamber. The method updates property attributes based
             # on mass and temperature derivatives computed through mass and energy balances.
@@ -1104,22 +1228,23 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
     
     theta = 0
     theta_step = theta_step_base
+    
     while theta < geo.theta_d - theta_step:
     
         leakage_computation(property_matrix, geo, 'ddd', CV_s1, CV_c1, CV_d1, CV_ddd, leakage)
         CV_s1.mass_flow_su(property_matrix, geo, rho_in, T_in, x_l_in, theta_step)
         CV_ddd.mass_flow_ex(property_matrix, geo, P_out, theta_step, Reed_valve)         
-        CV_s1.record_values()
+        CV_s1.record_values(1)
         
         alpha = 1
         while alpha <= geo.N_c_max:
-            CV_c1[alpha].record_values()
+            CV_c1[alpha].record_values(1)
             alpha += 1
         
-        CV_ddd.record_values()
-        CV_d1.record_values()
-        CV_dd.record_values()
-        
+        CV_ddd.record_values(1)
+        CV_d1.record_values(0)
+        CV_dd.record_values(0)
+            
         CV_s1.next_values(property_matrix, omega, theta_step)
 
         alpha = 1
@@ -1141,14 +1266,18 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
         CV_dd.mass_flow_ex(property_matrix, geo, P_out, theta_step, Reed_valve)
         CV_dd.mass_flow_dis_dd(property_matrix, geo, CV_d1)
               
-        CV_s1.record_values()
+    
+        CV_s1.record_values(1)
         alpha = 1
         while alpha <= geo.N_c_max:
-            CV_c1[alpha].record_values()
+            if alpha <= geo.N_c_max - 1:
+                CV_c1[alpha].record_values(1)
+            else:
+                CV_c1[alpha].record_values(0)
             alpha += 1
-        CV_ddd.record_values()
-        CV_d1.record_values()
-        CV_dd.record_values()
+        CV_ddd.record_values(0)
+        CV_d1.record_values(1)
+        CV_dd.record_values(1)
         
         CV_s1.next_values(property_matrix, omega, theta_step)    
         alpha = 1
@@ -1170,15 +1299,19 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
     
         CV_s1.mass_flow_su(property_matrix, geo, rho_in, T_in, x_l_in, theta_step)
         CV_ddd.mass_flow_ex(property_matrix, geo, P_out, theta_step, Reed_valve)  
+
  
-        CV_s1.record_values()
+        CV_s1.record_values(1)
         alpha = 1
         while alpha <= geo.N_c_max:
-            CV_c1[alpha].record_values()
+            if alpha <= geo.N_c_max - 1:
+                CV_c1[alpha].record_values(1)
+            else:
+                CV_c1[alpha].record_values(0)
             alpha += 1
-        CV_ddd.record_values()
-        CV_d1.record_values()
-        CV_dd.record_values()
+        CV_ddd.record_values(1)
+        CV_d1.record_values(0)
+        CV_dd.record_values(0)
         
         CV_s1.next_values(property_matrix, omega, theta_step)     
         alpha = 1  
@@ -1194,14 +1327,20 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
     print('----------------------------------')
     print('Simulation finished')
     
-    # 'CV' is a dictionary where al the recorded value 
+    # 'CV' is a dictionary where all the recorded value are stored.
     CV = {'s1' : CV_s1, 'c1' : CV_c1, 'd1' : CV_d1, 'dd' : CV_dd, 'ddd' : CV_ddd }
     
-    return (m_dot_final, eta_is_final, eta_v_final, W_dot_final, CV)
+    # AFter the simulation has been performed it is possible to compute the dynamic effects acting on the scroll set.
+    [axial_force, radial_force, tilting_moment_x, tilting_moment_y, tilting_moment] = force_computation(CV,CV_sa,geo,theta_step,dict_V)
+
+    
+    return m_dot_final, eta_is_final, eta_v_final, W_dot_final, CV, axial_force, radial_force, tilting_moment_x, tilting_moment_y, tilting_moment
 
 
+#%%
+# This part of the code is related to the result file managemente.
 
-
+# 'save_result' function save a pickle file where results are stored.
 def save_results(name, results):
     # 'list_file' specifies the precise file directory
     list_file = ['C:\\Users\\Utente1\\Documents\\Tifeo\\Python\\Compressore\\Results' , name ,'.pkl']
@@ -1215,8 +1354,7 @@ def save_results(name, results):
         # This process is also called as serilaization.
         pickle.dump(results, file)
   
-
-
+    
 def open_results(name):
     # 'list_file' specifies the precise file directory
     list_file = ['C:\\Users\\Utente1\\Documents\\Tifeo\\Python\\Compressore\\Results' , name ,'.pkl']
@@ -1230,7 +1368,7 @@ def open_results(name):
         output = pickle.load(file)
      
     return output
-    
+
 
 def file_name(filename):
     list_path = ['C:\\Users\\Utente1\\Documents\\Tifeo\\Python\\Compressore\\Results\\' , filename ,'.pkl']
