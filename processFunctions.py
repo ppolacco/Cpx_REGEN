@@ -175,7 +175,7 @@ def isentropic_nozzle(geo, property_matrix, area, rho1, T1, x_l1, rho2 = None, T
         
         # Discretization of the pressure variation through the nozzle
         D_p = (P_up - P_down)/(N_p-1)
-        P = np.linspace(P_up, P_down, N_p, endpoint =True)   
+        P = np.linspace(P_up, P_down, N_p, endpoint = True)   
         
         # Initialization of the specific volume
         v = np.ones(len(P))*v_up
