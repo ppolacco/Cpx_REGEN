@@ -9,22 +9,91 @@ Created on Wed Feb  3 16:44:14 2021
 import GeometryFunctions as geoF
 from math import pi
 import numpy as np
+import matplotlib.animation as animation
 
 import matplotlib.pyplot as plt
 import solverFunctions as solverF
 from scipy.interpolate import interp1d
+from scipy import integrate as intg
 
 
 
-# The 'scrollPlot' function takes as input the object 'geo' that contains all the information related to the 
-# machine geometry and the set of angles 'theta'. The output of the fucntion is the plot of the geometry specified 
-# in 'geo'
+def scrollAnim(geo, mode = "comp", save = 0):
+    
+    """ 
+    Function allowing to animate the movement of the scrolls. 
+    - geo is the class containing the geometry
+    - mode is a string containing either "comp" in compressor mode or "exp" in expoander mode
+    - save is integer, if == 0 no save of the animation, if == 1, saving the animation
+    Warning: specify the path to save the animation in the funtion!
+    
+    """
+    
+    theta = 0
+    dtheta = 5*2*pi/360
+    geo.getCoordFullGeometry(theta)
+    
+    fig = plt.figure()
+    ax = plt.axes(xlim = (-70,70),ylim = (-70,70))
+    (xport, yport) = geo.discharge_port()
+    plt.plot(xport, yport,'k', zorder=0)
+    plt.plot(geo.x_fscroll,geo.y_fscroll,'k')
+    plt.fill(geo.x_fscroll, geo.y_fscroll, color='orange')
+    #patch = patches.Polygon(pol,closed=True, fc='r', ec='r')
+    plt.plot(geo.x_wall,geo.y_wall,'k')
+    
+    point = geo.vect_oxy
+    
+    patch = plt.Polygon(point, fc='grey')
+    line, = plt.plot([],[],color='k')
+     
+    def init():
+        
+        ax.add_patch(patch)
+        line.set_data([],[])
+        return patch, line,
+    
+    def animate(i):
+        if mode == "exp": 
+            theta = 2*pi - i* dtheta
+        else:
+            theta = i* dtheta
+        geo.getCoordFullGeometry(theta)
+        patch.set_xy(geo.vect_oxy)
+        line.set_data(geo.x_oscroll,geo.y_oscroll)
+    
+        return patch, line,
+    
+    ani = animation.FuncAnimation(fig, animate, init_func=init, frames=72, blit=True, interval=20, repeat=True)
+
+    if save == 1:
+        f = r"C:\Users\nicol\OneDrive\Documents\Doctorat\Regen_by_two\Coding\Images\scroll_SANDEN.gif" 
+        writergif = animation.PillowWriter(fps=30) 
+        ani.save(f, writer=writergif)
+    else:
+        pass
+    
+    
+    return ani 
+    
+
+    
+
+    
 def scrollPlot(geo,theta):
+    """
+    
 
+    Functions plotting the scroll set for a given orbiting angle.
+   
+
+    """
+    
+    
     geo.getCoordFullGeometry(theta)
     
     plt.figure()
-    ax = plt.axes(xlim = (-70,70),ylim = (-70,70))
+    ax = plt.axes(xlim = (-(geo.D_wall/2+1),geo.D_wall/2+1),ylim = (-(geo.D_wall/2+1),geo.D_wall/2+1))
     
     (xport, yport) = geo.discharge_port()
     plt.plot(xport, yport,'k', zorder=1)
@@ -36,15 +105,15 @@ def scrollPlot(geo,theta):
     # Plot forces 
 
     # scale = 10
-    # f_s1 = geoF.volume_force_s1(geo,theta)["f_vect"]
-    # f_s2 = geoF.volume_force_s2(geo,theta)["f_vect"]
-    # f_sa = geoF.volume_force_sa(geo,theta)["f_vect"]
+    # f_s1 = volume_force_s1(geo,theta)["f_vect"]
+    # f_s2 = volume_force_s2(geo,theta)["f_vect"]
+    # f_sa = volume_force_sa(geo,theta)["f_vect"]
     
-    # c1 = geoF.volume_force_c1(geo,theta)
-    # c2 = geoF.volume_force_c2(geo,theta)
-    # f_d1 = geoF.volume_force_d1(geo,theta)["f_vect"]
-    # f_d2 = geoF.volume_force_d2(geo,theta)["f_vect"]
-    # f_dd = geoF.volume_force_dd(geo,theta)["f_vect"]    
+    # c1 = volume_force_c1(geo,theta)
+    # c2 = volume_force_c2(geo,theta)
+    # f_d1 = volume_force_d1(geo,theta)["f_vect"]
+    # f_d2 = volume_force_d2(geo,theta)["f_vect"]
+    # f_dd = volume_force_dd(geo,theta)["f_vect"]    
     
     # for i in range(0,len(f_s1[0,:]),3):
     #     plt.arrow(f_s1[0,i], f_s1[1,i], f_s1[2,i]*scale, f_s1[3,i]*scale, width = 0.3,zorder=3)   
@@ -78,19 +147,19 @@ def scrollPlot(geo,theta):
     
     
     # geo.important_values()
-    # xy_polyS1 = geoF.volume_force_s1(geo,theta)["xy_poly"]
-    # xy_polyS2 = geoF.volume_force_s2(geo,theta)["xy_poly"]
-    # xy_polySA1 = geoF.volume_force_SA(geo,theta)["xy_polySA1"]
-    # xy_polySA2 = geoF.volume_force_SA(geo,theta)["xy_polySA2"]
+    # xy_polyS1 = volume_force_s1(geo,theta)["xy_poly"]
+    # xy_polyS2 = volume_force_s2(geo,theta)["xy_poly"]
+    # xy_polySA1 = volume_force_SA(geo,theta)["xy_polySA1"]
+    # xy_polySA2 = volume_force_SA(geo,theta)["xy_polySA2"]
     
-    # xy_polyC11 = geoF.volume_force_c1(geo,theta,geo.N_c_max)["xy_poly"]
-    # xy_polyC12 = geoF.volume_force_c1(geo,theta,1)["xy_poly"]
-    # xy_polyC21 = geoF.volume_force_c2(geo,theta,geo.N_c_max)["xy_poly"]
-    # xy_polyC22 = geoF.volume_force_c2(geo,theta,1)["xy_poly"]
+    # xy_polyC11 = volume_force_c1(geo,theta,geo.N_c_max)["xy_poly"]
+    # xy_polyC12 = volume_force_c1(geo,theta,1)["xy_poly"]
+    # xy_polyC21 = volume_force_c2(geo,theta,geo.N_c_max)["xy_poly"]
+    # xy_polyC22 = volume_force_c2(geo,theta,1)["xy_poly"]
     
-    #xy_polyD1 = geoF.volume_force_d1(geo,theta)["xy_poly"]
-    # xy_polyD2 = geoF.volume_force_d2(geo,theta)["xy_poly"]
-    # xy_polyDD = geoF.volume_force_dd(geo,theta)["xy_poly"]
+    #xy_polyD1 = volume_force_d1(geo,theta)["xy_poly"]
+    # xy_polyD2 = volume_force_d2(geo,theta)["xy_poly"]
+    # xy_polyDD = volume_force_dd(geo,theta)["xy_poly"]
 
     
     # plt.plot(xy_polyS1[:,0], xy_polyS1[:,1],'b')
@@ -116,14 +185,75 @@ def scrollPlot(geo,theta):
     # plt.plot(x_polyShade, y_polyShade,'b',linewidth=2.5)
     
 
-# The function 'plot_V_dV' takes as input the object 'geo' that contains all the information related to the 
-# machine geometry and it plots chambers' volume and volume derivatives versus the orbithing angle.
+
+
+
+def plot_area_port(geo):
+    
+    """
+    
+
+    Functions plotting the areas of the flow pathes
+   
+
+    """
+
+    
+    theta = np.linspace(0,2*pi,90)
+    
+    area_port =  np.zeros(len(theta))
+    area_suction =  np.zeros(len(theta))
+    area_discharge = np.zeros(len(theta))
+    for i in range(len(theta)):
+        (_,_,area_port[i]) = geoF.polyShadedPortArea(geo, theta[i])
+        (_,_,area_suction[i]) = geoF.suctionFlowArea(geo, theta[i])
+        (_,_,area_discharge[i]) = geoF.area_d_dd(geo,theta[i])
+  
+    plt.figure(figsize=(5.5,4.5))
+    plt.xlim(theta.min(), theta.max())
+    plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
+       [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
+
+    plt.ylim(area_port.min()/1.4,area_port.max()*1.1)
+    #plt.yticks([-1, 0, +1],
+    #   [r'$-1$', r'$0$', r'$+1$'])
+    plt.grid()
+    plt.plot(theta, area_port, linewidth = 2)
+    plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
+    plt.ylabel('Discharge Port Area [mm$^2$]',fontsize=16, fontname="Times New Roman")
+    
+    #################################
+    plt.figure(figsize=(5.5,4.5))
+    plt.xlim(theta.min(), theta.max())
+    plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
+       [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
+
+    plt.ylim(area_suction.min()/1.4,area_suction.max()*1.1)
+    #plt.yticks([-1, 0, +1],
+    #   [r'$-1$', r'$0$', r'$+1$'])
+    plt.grid()
+    plt.plot(theta, area_suction, linewidth = 2)
+    plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
+    plt.ylabel('Suction Area [mm$^2$]',fontsize=16, fontname="Times New Roman")
+    
+    ##########################
+    plt.figure(figsize=(5.5,4.5))
+    plt.xlim(theta.min(), theta.max())
+    plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
+       [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
+
+    #plt.ylim(area_discharge.min()/,area_discharge.max()*1.1)
+    #plt.yticks([-1, 0, +1],
+    #   [r'$-1$', r'$0$', r'$+1$'])
+    plt.grid()
+    plt.plot(theta, area_discharge, linewidth = 2)
+    plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
+    plt.ylabel('D-DD Area [mm$^2$]',fontsize=16, fontname="Times New Roman")
+
 def plot_V_dV(geo):
      
-     # The orbiting angle [0,2pi] is dicretized using 90 steps
      theta = np.linspace(0,2*pi,90)
      
-     # Initialization of the vectors in which volume size will be collected
      V_s1_vect = np.zeros(len(theta))
      V_s2_vect = np.zeros(len(theta))
      V_c1_vect = np.zeros((len(theta),geo.N_c_max))
@@ -134,7 +264,6 @@ def plot_V_dV(geo):
      V_dd_vect = np.zeros(len(theta))
      V_ddd_vect = np.zeros(len(theta))
      
-     # Initialization of the vectors in which volume derivatives will be collected
      dV_s1_vect = np.zeros(len(theta))
      dV_s2_vect = np.zeros(len(theta))
      dV_c1_vect = np.zeros((len(theta),geo.N_c_max))
@@ -144,23 +273,18 @@ def plot_V_dV(geo):
      dV_dd_vect = np.zeros(len(theta))
      dV_dd_vect = np.zeros(len(theta))
      dV_ddd_vect = np.zeros(len(theta))
-     
-     # The 'volume_force_*' functions returns A dictionnary containing the volume, volume derivative,
-     # coordinate of the centroid and orbiting moment generated by the chamber *. There is a function for 
-     #any type of chambers inside a scroll machine.
-     # Chambers are evalutad at all the considered orbiting angles 'theta'
+  
      for i in range(len(theta)): 
-         # COMPUTATION OF VOLUMES
          V_s1_vect[i] = geoF.volume_force_s1(geo,theta[i])["V"]
          V_s2_vect[i] = geoF.volume_force_s2(geo,theta[i])["V"]
-         # The compression chambers are in number of 'alpha'
+         
          for alpha in range(1,geo.N_c_max + 1,1):
              V_c1_vect[i,alpha-1] = geoF.volume_force_c1(geo,theta[i])[alpha]["V"]
              V_c2_vect[i,alpha-1] = geoF.volume_force_c2(geo,theta[i])[alpha]["V"]
          V_d1_vect[i] = geoF.volume_force_d1(geo,theta[i])["V"]
          V_d2_vect[i] = geoF.volume_force_d2(geo,theta[i])["V"]
          V_dd_vect[i] = geoF.volume_force_dd(geo,theta[i])["V"]
-         # COMPUTATION OF VOLUME DERIVATIVES
+         
          dV_s1_vect[i] = geoF.volume_force_s1(geo,theta[i])["dVdTheta"]
          dV_s2_vect[i] = geoF.volume_force_s2(geo,theta[i])["dVdTheta"]
          for alpha in range(1,geo.N_c_max + 1,1):        
@@ -179,12 +303,12 @@ def plot_V_dV(geo):
             dV_ddd_vect[i] = dV_d1_vect[i] + dV_d2_vect[i] + dV_dd_vect[i]
             dV_d1_vect[i] = np.nan
             dV_d2_vect[i] = np.nan
-            dV_dd_vect[i] = np.nan 
+            dV_dd_vect[i] = np.nan
+            
          else:
             V_ddd_vect[i] = np.nan
             dV_ddd_vect[i] = np.nan
-    
-     
+         
      line_vs = (V_s1_vect + V_s2_vect)/1000
      line_vc1 = (V_c1_vect[:,0] + V_c2_vect[:,0])/1000
      line_vc2 = (V_c1_vect[:,1] + V_c2_vect[:,1])/1000
@@ -199,14 +323,13 @@ def plot_V_dV(geo):
      line_dvdd = (dV_dd_vect )/1000
      line_dvddd = (dV_ddd_vect )/1000
      
-     # Definition of the volume plot parameters and frame
+     
      #Volume plot
      plt.figure(figsize=(6,4.5),constrained_layout=True)
      plt.xlim(theta.min(), theta.max())
      plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
        [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
-     
-     # Plot of the volumes
+
      plt.ylim(0,line_vs.max()*1.1)
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
@@ -222,17 +345,16 @@ def plot_V_dV(geo):
      plt.text(1.5, 38,'$V_{d1} + V_{d2}$',fontsize=14)
      plt.text(2, 6,'$V_{dd}$',fontsize=14)
      plt.text(5, 15,'$V_{ddd}$',fontsize=14)
-     # Definition of plot lables
+     
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Volume [cm$^3$]',fontsize=16, fontname="Times New Roman")   
          
-     # Definition of the volume derivative plot parameters and frame
+      #Derivative plot
      plt.figure(figsize=(6,4.5))
      plt.xlim(theta.min(), theta.max())
      plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
        [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
-     
-     # Plot of volume derivatives
+
      plt.ylim(-20,line_dvs.max()*1.1)
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
@@ -248,27 +370,27 @@ def plot_V_dV(geo):
      plt.text(1.8, -15, r'$ \dfrac{\mathrm{d}V_{d1}}{\mathrm{d} \theta} +  \dfrac{\mathrm{d}V_{d2}}{\mathrm{d} \theta}$',fontsize=14)
      plt.text(1.5, 4.6, r'$ \dfrac{\mathrm{d}V_{dd}}{\mathrm{d} \theta} $',fontsize=14)
      plt.text(4.2, -2, r'$ \dfrac{\mathrm{d}V_{ddd}}{\mathrm{d} \theta} $',fontsize=14)
-     # Definition of plot lables
+
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Volume Derivative [cm$^3$/rad]',fontsize=16, fontname="Times New Roman")       
          
      
-def plot_evolution(geo, CV, P_out, P_in):
+def plot_evolution(geo, results, P_out, P_in):
     
-    
-     CV_s1   = CV['s1']
-     CV_c1   = CV['c1']
-     CV_d1   = CV['d1']
-     CV_dd   = CV['dd']
-     CV_ddd   = CV['ddd']
-    
+     # Recorded results related to chambers are pulled out of the 'results' dictionary
+     CV_s1  = results['CV']['s1']
+     CV_c1  = results['CV']['c1']
+     CV_d1  = results['CV']['d1']
+     CV_dd  = results['CV']['dd']
+     CV_ddd  = results['CV']['ddd']
+     
+     # Data are converted in a way that make this function work
      (vect_s1, vect_c1, vect_d1, vect_dd, vect_ddd) = solverF.convert_recorded_values(geo, CV_s1, CV_c1, CV_d1, CV_dd, CV_ddd)
-     
-     
      
      xdim = 5.5
      ydim = 4.5
-     #%% Pressure 
+     
+     # PRESSURE
      prop = 'P'
      
      plt.figure(dpi=100,figsize=(xdim,ydim),constrained_layout=True)
@@ -280,8 +402,7 @@ def plot_evolution(geo, CV, P_out, P_in):
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
-     
-     
+        
      plt.plot(vect_s1['theta'], vect_s1[prop]/1e5 , linewidth = 2, label ='s1' )
      alpha = 1
      while alpha <= geo.N_c_max:
@@ -291,7 +412,6 @@ def plot_evolution(geo, CV, P_out, P_in):
              plt.plot(vect_s1['theta'], vect_c1[alpha][prop]/1e5 , 'r', linewidth = 2 )   
          alpha += 1
         
-
      plt.plot(vect_s1['theta'], vect_d1[prop]/1e5 , 'g',  linewidth = 2, label ='d1' )
      plt.plot(vect_s1['theta'], vect_dd[prop]/1e5 , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop]/1e5 ,'y', linewidth = 2, label ='ddd' )
@@ -305,7 +425,7 @@ def plot_evolution(geo, CV, P_out, P_in):
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)
      
-     #%% Temperature
+     # TEMPERATURE
      
      prop = 'T'
      
@@ -319,7 +439,6 @@ def plot_evolution(geo, CV, P_out, P_in):
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
      
-     
      plt.plot(vect_s1['theta'], vect_s1[prop] , linewidth = 2, label ='s1' )
      alpha = 1
      while alpha <= geo.N_c_max:
@@ -329,20 +448,17 @@ def plot_evolution(geo, CV, P_out, P_in):
              plt.plot(vect_s1['theta'], vect_c1[alpha][prop] , 'r', linewidth = 2 )   
          alpha += 1
         
-
      plt.plot(vect_s1['theta'], vect_d1[prop] , 'g',  linewidth = 2, label ='d1' )
      plt.plot(vect_s1['theta'], vect_dd[prop] , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop] ,'y', linewidth = 2, label ='ddd' )
-
-
-     
+ 
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Temperature [K]',fontsize=16, fontname="Times New Roman")            
      
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)     
            
-     #%% entropy
+     # ENTROPY
      
      prop = 's'
      
@@ -355,8 +471,7 @@ def plot_evolution(geo, CV, P_out, P_in):
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
-     
-     
+       
      plt.plot(vect_s1['theta'], vect_s1[prop] , linewidth = 2, label ='s1' )
      alpha = 1
      while alpha <= geo.N_c_max:
@@ -366,20 +481,17 @@ def plot_evolution(geo, CV, P_out, P_in):
              plt.plot(vect_s1['theta'], vect_c1[alpha][prop] , 'r', linewidth = 2 )   
          alpha += 1
         
-
      plt.plot(vect_s1['theta'], vect_d1[prop] , 'g',  linewidth = 2, label ='d1' )
      plt.plot(vect_s1['theta'], vect_dd[prop] , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop] ,'y', linewidth = 2, label ='ddd' )
 
-
-     
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Entropy [J/(kgK)]',fontsize=16, fontname="Times New Roman")            
      
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)          
      
-     #%% Quality
+     # VAPOR QUALITY
      
      prop = 'Q'
      
@@ -392,8 +504,7 @@ def plot_evolution(geo, CV, P_out, P_in):
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
-     
-     
+      
      plt.plot(vect_s1['theta'], vect_s1[prop] , linewidth = 2, label ='s1' )
      alpha = 1
      while alpha <= geo.N_c_max:
@@ -403,20 +514,17 @@ def plot_evolution(geo, CV, P_out, P_in):
              plt.plot(vect_s1['theta'], vect_c1[alpha][prop] , 'r', linewidth = 2 )   
          alpha += 1
         
-
      plt.plot(vect_s1['theta'], vect_d1[prop] , 'g',  linewidth = 2, label ='d1' )
      plt.plot(vect_s1['theta'], vect_dd[prop] , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop] ,'y', linewidth = 2, label ='ddd' )
 
-
-     
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Quality [-]',fontsize=16, fontname="Times New Roman")            
      
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)          
 
-     #%% Mass 
+     # MASS
      
      prop = 'm'
      
@@ -430,7 +538,6 @@ def plot_evolution(geo, CV, P_out, P_in):
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
      
-     
      plt.plot(vect_s1['theta'], vect_s1[prop] , linewidth = 2, label ='s1' )
      alpha = 1
      while alpha <= geo.N_c_max:
@@ -445,16 +552,13 @@ def plot_evolution(geo, CV, P_out, P_in):
      plt.plot(vect_s1['theta'], vect_dd[prop] , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop] ,'y', linewidth = 2, label ='ddd' )
 
-
-     
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Mass [kg]',fontsize=16, fontname="Times New Roman")            
      
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)               
 
-
-     #%% x_l
+     # OIL FLOW RATE
      
      prop = 'x_l'
      
@@ -478,20 +582,17 @@ def plot_evolution(geo, CV, P_out, P_in):
              plt.plot(vect_s1['theta'], vect_c1[alpha][prop] , 'r', linewidth = 2 )   
          alpha += 1
         
-
      plt.plot(vect_s1['theta'], vect_d1[prop] , 'g',  linewidth = 2, label ='d1' )
      plt.plot(vect_s1['theta'], vect_dd[prop] , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop] ,'y', linewidth = 2, label ='ddd' )
 
-
-     
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Oil rate [-]',fontsize=16, fontname="Times New Roman")            
      
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)                 
 
-#%% rho
+    # DENSITY
      
      prop = 'rho'
      
@@ -504,8 +605,7 @@ def plot_evolution(geo, CV, P_out, P_in):
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
-     
-     
+      
      plt.plot(vect_s1['theta'], vect_s1[prop] , linewidth = 2, label ='s1' )
      alpha = 1
      while alpha <= geo.N_c_max:
@@ -515,20 +615,18 @@ def plot_evolution(geo, CV, P_out, P_in):
              plt.plot(vect_s1['theta'], vect_c1[alpha][prop] , 'r', linewidth = 2 )   
          alpha += 1
         
-
      plt.plot(vect_s1['theta'], vect_d1[prop] , 'g',  linewidth = 2, label ='d1' )
      plt.plot(vect_s1['theta'], vect_dd[prop] , 'k', linewidth = 2, label ='dd' )
      plt.plot(vect_s1['theta'], vect_ddd[prop] ,'y', linewidth = 2, label ='ddd' )
 
-     
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Density [kg/m$^3$]',fontsize=16, fontname="Times New Roman")            
      
      plt.legend(bbox_to_anchor=(0,1.02,1,0.2), loc="lower left",
                 mode="expand", borderaxespad=0, ncol=3, fontsize=14)      
 
-
-#%% m_dot_su 
+     # SUCTION MASS FLOW 
+     
      prop = 'm_dot'
      
      plt.figure(dpi=100,figsize=(xdim,ydim),constrained_layout=True)
@@ -541,18 +639,13 @@ def plot_evolution(geo, CV, P_out, P_in):
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
      
-     
      plt.plot(vect_s1['theta'], vect_s1[prop]['su']*2 , linewidth = 2,  )
-     
-
-    
      
      plt.xlabel('Orbiting angle [rad]',fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Inlet mass flow rate [kg/s]',fontsize=16, fontname="Times New Roman")            
 
-
-
-  #%% m_dot_ex
+     # DISCHARGE MASS FLOW
+     
      prop = 'm_dot'
      
      plt.figure(dpi=100,figsize=(xdim,ydim),constrained_layout=True)
@@ -564,19 +657,17 @@ def plot_evolution(geo, CV, P_out, P_in):
      #plt.yticks([-1, 0, +1],
      #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
-     
-     
+      
      plt.plot(vect_s1['theta'], -vect_ddd['m_dot']['ex'] , linewidth = 2, label ='ddd' )
      plt.plot(vect_s1['theta'], -vect_dd['m_dot']['ex'] , linewidth = 2, label ='dd' )
 
-     
      plt.xlabel('Orbiting angle [rad]', fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Outlet mass flow rate [kg/s]', fontsize=16, fontname="Times New Roman")            
      
-
      plt.legend(fontsize=16, loc='best')
      
-  # #%% m_dot_d_dd
+     # MASS FLOW 'D-DD'
+     
      prop = 'm_dot'
      
      plt.figure(dpi=100,figsize=(xdim,ydim),constrained_layout=True)
@@ -589,15 +680,48 @@ def plot_evolution(geo, CV, P_out, P_in):
       #   [r'$-1$', r'$0$', r'$+1$'])
      plt.grid()
      
-     
      plt.plot(vect_s1['theta'], -vect_d1['m_dot']['fl2'] , linewidth = 2, label ='ddd' )
     
-
-     
      plt.xlabel('Orbiting angle [rad]', fontsize=16,  fontname="Times New Roman")
      plt.ylabel('Merging d-dd flow rate [kg/s]', fontsize=16, fontname="Times New Roman")            
+     plt.legend(fontsize=16, loc='best')
      
+     # FORCES
+     
+     plt.figure(dpi=100,figsize=(xdim,ydim),constrained_layout=True)
+     plt.xlim(vect_s1['theta'].min(), vect_s1['theta'].max())
+     plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
+       [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
 
+     max_limit = np.nanmax([np.nanmax(results['radial_force']),np.nanmax(results['tangential_force']),np.nanmax(results['axial_force'])]) 
+     min_limit = np.nanmin([np.nanmin(results['radial_force']),np.nanmin(results['tangential_force']),np.nanmin(results['axial_force'])])      
+     plt.ylim(min_limit*1.1, max_limit*1.1)
+
+     plt.grid()
+     
+     plt.plot(vect_s1['theta'], results['radial_force'], linewidth = 2, label = 'radial force' )
+     plt.plot(vect_s1['theta'], results['tangential_force'], linewidth = 2, label = 'tangential force' )
+     plt.plot(vect_s1['theta'], results['axial_force'], linewidth = 2, label = 'axial force' )
+     
+     plt.xlabel('Orbiting angle [rad]', fontsize = 16,  fontname = "Times New Roman")
+     plt.ylabel('Force [N]', fontsize = 16, fontname = "Times New Roman")
+     plt.legend(fontsize=16, loc='best')
+     
+     # TILTING MOMENT
+     
+     plt.figure(dpi=100,figsize=(xdim,ydim),constrained_layout=True)
+     plt.xlim(vect_s1['theta'].min(), vect_s1['theta'].max())
+     plt.xticks([0, pi/2, pi, 3*pi/2, 2*pi],
+       [r'0', r'$\pi/2$', r'$\pi$', r'$3\pi/2$', r'$2\pi$'])
+
+     plt.ylim(np.nanmin(results['tilting_moment'])*0.9, np.nanmax(results['tilting_moment'])*1.1)
+
+     plt.grid()
+     
+     plt.plot(vect_s1['theta'], results['tilting_moment'], linewidth = 2, label = 'tilting moment' )
+
+     plt.xlabel('Orbiting angle [rad]', fontsize=16,  fontname="Times New Roman")
+     plt.ylabel('Moment [Nm]', fontsize = 16, fontname="Times New Roman")
      plt.legend(fontsize=16, loc='best')
 
 def basic_plot(x, y, name_x, name_y, x2 = [None], y2 = [None]):    
@@ -607,8 +731,7 @@ def basic_plot(x, y, name_x, name_y, x2 = [None], y2 = [None]):
     x_new = np.linspace(x.min(),x.max(),100, endpoint=True)
     plt.figure(figsize=(7,4.5),constrained_layout=True)
     d_x = x.max() - x.min()
-    
-    
+       
     if x2[0] != None: 
         d_y = y.max() - y2.min()
         plt.ylim(y2.min() - 0.1*d_y, y.max() + 0.1*d_y)
@@ -616,8 +739,6 @@ def basic_plot(x, y, name_x, name_y, x2 = [None], y2 = [None]):
         d_y = y.max() - y.min() 
         plt.ylim(y.min() - 0.1*d_y, y.max() + 0.1*d_y)
     plt.xlim(x.min() - 0.1*d_x, x.max() + 0.1*d_x)
-    
-    
     
     plt.grid()
     
@@ -635,7 +756,97 @@ def basic_plot(x, y, name_x, name_y, x2 = [None], y2 = [None]):
     plt.legend(['data', 'curve'],fontsize=16, loc='best')
     
     
+def PV_diagramm(geo, CV, P_out, P_in):  
+    
+     CV_s1   = CV['s1']
+     CV_c1   = CV['c1']
+     CV_d1   = CV['d1']
+     CV_dd   = CV['dd']
+     CV_ddd  = CV['ddd']
+     
+     (vect_s1, vect_c1, vect_d1, vect_dd, vect_ddd) = solverF.convert_recorded_values(geo, CV_s1, CV_c1, CV_d1, CV_dd, CV_ddd)
+     
+     
+     theta = np.linspace(0,2*pi,181)
+     V_dd = np.zeros(len(theta))
+     V_ddd = np.zeros(len(theta))
+     for i in range(len(theta)):
+         V_dd[i] = geoF.volume_force_dd(geo,theta[i],False)["V"]/1e9
+         V_ddd[i] = geoF.volume_force_dd(geo,theta[i],False)["V"]/1e9
+     
+     coefs_V_dd = np.array(np.polyfit(theta, V_dd, 5)) 
+     V_dd_vect = np.polyval(coefs_V_dd, CV_s1.theta_vect_final)
+     
+     # plt.figure(figsize=(7,4.5),constrained_layout=True)
+     # plt.plot(theta,V_dd)
+     # plt.plot(CV_s1.theta_vect_final,V_dd_vect)
+     
+     (V_s, P_s) = (2*vect_s1['V'], vect_s1['P'])
+     
+     V_c = 2*vect_c1[1]['V']
+     P_c = vect_c1[1]['P']
+     for alpha in range(2,geo.N_c_max):
+          (V_c, P_c) = (np.concatenate((V_c, 2*vect_c1[alpha]['V']), axis=None), np.concatenate((P_c, vect_c1[alpha]['P']), axis=None))
 
+
+     V_ddd_vect_1 =  vect_ddd['V'].copy() - V_dd_vect
+     V_ddd_vect_2 =  vect_ddd['V'].copy() - V_dd_vect
+     P_ddd_vect_1 = vect_ddd['P'].copy()
+     P_ddd_vect_2 = vect_ddd['P'].copy()
+     
+     (V_c_last, P_c_last) = (2*np.nan_to_num(vect_c1[geo.N_c_max]['V']), np.nan_to_num(vect_c1[geo.N_c_max]['P']))
+     (V_d_last, P_d_last) = (2*np.nan_to_num(vect_d1['V']), np.nan_to_num(vect_d1['P']))
+     V_dis = V_d_last[V_d_last != 0][0]
+     
+     for i in range(len(CV_s1.theta_vect_final)):
+         if  CV_s1.theta_vect_final[i] <= geo.theta_d:
+             V_ddd_vect_1[i] = 0
+             P_ddd_vect_1[i] = 0
+     V_ddd_vect_1 = np.nan_to_num(V_ddd_vect_1)
+     P_ddd_vect_1 = np.nan_to_num(P_ddd_vect_1)
+     (V_ddd_1, P_ddd_1) = (np.nan_to_num(CV_ddd.V_vect_final), np.nan_to_num(CV_ddd.P_vect_final))
+     
+     (V_dis1, P_dis1) = (V_c_last + V_d_last + V_ddd_vect_1, P_c_last + P_d_last + P_ddd_vect_1)
+     
+     for i in range(len(CV_s1.theta_vect_final)):
+         if  CV_s1.theta_vect_final[i] > geo.theta_d:
+             V_ddd_vect_2[i] = np.nan
+             P_ddd_vect_2[i] = np.nan
+     
+     V_vect = np.concatenate((V_s, V_c , V_dis1, V_ddd_vect_2), axis=None)*1e6
+     P_vect = np.concatenate((P_s, P_c, P_dis1, P_ddd_vect_2), axis=None)/1e5
+     
+
+     plt.figure(figsize=(4,3),constrained_layout=True)
+     plt.xlim(0, np.nanmax(V_vect)*1.1)
+     
+     plt.ylim(P_in*0.9*1e-5, P_out*1.1*1e-5)
+     # plt.ylim(np.nanmin(P_vect)/1.1, np.nanmax(P_vect)*1.1)
+     #plt.yticks([-1, 0, +1],
+     #   [r'$-1$', r'$0$', r'$+1$'])
+     plt.grid()
+     
+     
+     V_plot = np.linspace(0,np.nanmax(V_vect)*1.1, 10)
+     P_plot = np.linspace(1,9, 10)
+     plt.plot(V_vect, P_vect, color = u'#ff7f0e', linewidth = 2 )
+     plt.plot(  V_plot  ,  P_out/1e5*np.ones(len( V_plot)), 'k--' , label = r'$P_{out}$')
+     plt.plot(  V_plot ,  P_in/1e5*np.ones(len( V_plot)), 'k--' , label = r'$P_{in}$')
+     
+     plt.plot(  V_dis*1e6*np.ones(len( P_plot)) ,  P_plot, 'k-.' , label = r'$P_{in}$')
+     
+     plt.xlabel('Volume [cm$^3$]', fontsize=16,  fontname="Times New Roman")
+     plt.ylabel('Pressure [bar]', fontsize=16, fontname="Times New Roman")       
+     
+     V_vect_plus = np.concatenate((V_s, V_c , V_dis1, V_ddd_vect_2, V_s[0]), axis=None)*1e6
+     P_vect_plus = np.concatenate((P_s, P_c, P_dis1, P_ddd_vect_2, P_s[0] ), axis=None)/1e5
+      
+     W = intg.trapz(np.nan_to_num(V_vect)/1e6, np.nan_to_num(P_vect)*1e5 )
+     
+     # W_new = polygonArea(np.nan_to_num(V_vect_plus)/1e6, np.nan_to_num(P_vect_plus)*1e5)
+
+     return W
+ 
 
  
     
@@ -647,7 +858,7 @@ def plot_volumes(geo, CV):
    CV_dd   = CV['dd']
    CV_ddd  = CV['ddd']
     
-   (vect_s1, vect_c1, vect_d1, vect_dd, vect_ddd) = solverF.convert_recorded_values(geo, CV_s1, CV_c1, CV_d1, CV_dd, CV_ddd)
+   (vect_s1, vect_c1, vect_d1, vect_dd, vect_ddd) = geoF.convert_recorded_values(geo, CV_s1, CV_c1, CV_d1, CV_dd, CV_ddd)
         
     
    theta_vol = np.linspace(0,2*pi,361)
