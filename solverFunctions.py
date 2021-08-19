@@ -288,10 +288,8 @@ class controlVolume:
     # The 'update' method of the 'controlVolume' class computes pressure, quality, entropy and enthalpy 
     # of a given control volume based on its pressure and density.
     def update(self, property_matrix):    
-        self.P = propF.propfunction_mixture(property_matrix, self.x_l, 'P', T = self.T , rho = self.rho)
         self.Q = propF.propfunction_mixture(property_matrix, self.x_l, 'Q', T = self.T , rho = self.rho)
         self.s = propF.propfunction_mixture(property_matrix, self.x_l, 's', T = self.T , rho = self.rho) 
-        self.h = propF.propfunction_mixture(property_matrix, self.x_l, 'h', T = self.T , rho = self.rho) 
         
     
     # The 'mass_flow_su' method computes the mass flow rate at suction based on the assumption that it behaves
@@ -330,12 +328,12 @@ class controlVolume:
             # value and opens gradually the port until the pressure reaches the value of the discharge region.
             if Reed_valve == True:
                 delta_P = P_out/10
-                if self.P < P_out - delta_P:
+                if self.P < P_out:
                     (m_dot_ex, h_ex, _) = (0,0,0)
-                elif self.P > P_out: 
+                elif self.P > P_out + delta_P: 
                     (m_dot_ex, h_ex, _) = procF.isentropic_nozzle(geo, property_matrix, A_port,  self.rho,  self.T, self.x_l, h2 = self.h_out, P2 = P_out, x_l2 = self.x_out)
                 else:
-                    A_port = A_port*(self.P - P_out + delta_P)/(delta_P)
+                    A_port = A_port*(self.P - P_out)/(delta_P)
                     (m_dot_ex, h_ex, _) = procF.isentropic_nozzle(geo, property_matrix, A_port,  self.rho,  self.T, self.x_l, h2 = self.h_out, P2 = P_out, x_l2 = self.x_out)
             # If reed valve model is not included the discharge port is considered to be fully open at all times
             if Reed_valve == False:
@@ -1064,6 +1062,8 @@ def force_computation(CV,CV_sa,geo,theta_step,dict_V):
         # Auxiliary variables are re-initialized
         tilting_moment_aux_x = 0
         tilting_moment_aux_y = 0
+        force_x_aux = 0
+        force_y_aux = 0
         
     # Force are converted from string to array
     axial_force = np.array(axial_force)
@@ -1349,7 +1349,7 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
     # 'CV' is a dictionary where all the recorded value are stored.
     CV = {'s1' : CV_s1, 'c1' : CV_c1, 'd1' : CV_d1, 'dd' : CV_dd, 'ddd' : CV_ddd }
     
-    # AFter the simulation has been performed it is possible to compute the dynamic effects acting on the scroll set.
+    # After the simulation has been performed it is possible to compute the dynamic effects acting on the scroll set.
     [axial_force, tangential_force, radial_force, orbiting_force, tilting_moment] = force_computation(CV,CV_sa,geo,theta_step,dict_V)
     
     if bearing_model == True:
@@ -1371,7 +1371,7 @@ def full_resolution(geo, property_matrix, dict_V, dict_dV, dict_area, T_in, rho_
     print('----------------------------------')
     print('Simulation finished')
     
-    return m_dot_final, eta_is_final, eta_v_final, W_dot_final, CV, axial_force, tangential_force, radial_force, tilting_moment, orbiting_force
+    return m_dot_final, eta_is_final, eta_v_final, W_dot_final, CV, axial_force, tangential_force, radial_force, tilting_moment
 
 
 #%%
